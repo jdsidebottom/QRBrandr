@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import QRCode from 'qrcode';
-import { Download, Upload, QrCode, Settings, Image as ImageIcon, RefreshCw, Sun, Moon, Square, Circle } from 'lucide-react';
+import jsPDF from 'jspdf';
+import { Download, Upload, QrCode, Settings, Image as ImageIcon, RefreshCw, Sun, Moon, Square, Circle, FileImage, FileText, File } from 'lucide-react';
 
 interface QROptions {
   text: string;
@@ -10,6 +11,8 @@ interface QROptions {
   logoFile: File | null;
   logoShape: 'square' | 'rounded';
 }
+
+type ExportFormat = 'png' | 'svg' | 'pdf';
 
 const ERROR_CORRECTION_LEVELS = {
   L: { label: 'Low (7%)', value: 'L' as const },
@@ -23,6 +26,12 @@ const LOGO_SHAPES = {
   rounded: { label: 'Rounded', value: 'rounded' as const, icon: Circle },
 };
 
+const EXPORT_FORMATS = {
+  png: { label: 'PNG', value: 'png' as const, icon: FileImage, description: 'High-quality raster image' },
+  svg: { label: 'SVG', value: 'svg' as const, icon: FileText, description: 'Scalable vector graphics' },
+  pdf: { label: 'PDF', value: 'pdf' as const, icon: File, description: 'Portable document format' },
+};
+
 function App() {
   const [options, setOptions] = useState<QROptions>({
     text: 'https://example.com',
@@ -34,8 +43,10 @@ function App() {
   });
 
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [qrSvgString, setQrSvgString] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [autoGenerate, setAutoGenerate] = useState(true);
+  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('png');
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem('theme');
     return saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -84,6 +95,19 @@ function App() {
           light: isDarkMode ? '#1f2937' : '#ffffff'
         }
       });
+
+      // Generate SVG version for vector export
+      const svgString = await QRCode.toString(options.text, {
+        type: 'svg',
+        width: options.size,
+        margin: 2,
+        errorCorrectionLevel: options.errorCorrectionLevel,
+        color: {
+          dark: isDarkMode ? '#ffffff' : '#000000',
+          light: isDarkMode ? '#1f2937' : '#ffffff'
+        }
+      });
+      setQrSvgString(svgString);
 
       // Add logo if provided
       if (options.logoFile) {
@@ -156,13 +180,115 @@ function App() {
     }
   };
 
-  const downloadQRCode = () => {
-    if (!qrDataUrl) return;
+  const downloadQRCode = async () => {
+    if (!qrDataUrl && selectedFormat === 'png') return;
+    if (!qrSvgString && selectedFormat === 'svg') return;
     
-    const link = document.createElement('a');
-    link.download = `qrbrandr-qr-code-${Date.now()}.png`;
-    link.href = qrDataUrl;
-    link.click();
+    const timestamp = Date.now();
+    const baseFilename = `qrbrandr-qr-code-${timestamp}`;
+    
+    try {
+      switch (selectedFormat) {
+        case 'png':
+          const pngLink = document.createElement('a');
+          pngLink.download = `${baseFilename}.png`;
+          pngLink.href = qrDataUrl;
+          pngLink.click();
+          break;
+          
+        case 'svg':
+          let svgContent = qrSvgString;
+          
+          // Add logo to SVG if present
+          if (options.logoFile) {
+            const logoSizePercent = options.logoSize;
+            const logoSize = (options.size * logoSizePercent) / 100;
+            const x = (options.size - logoSize) / 2;
+            const y = (options.size - logoSize) / 2;
+            const padding = logoSize * 0.1;
+            
+            // Convert logo to base64
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            
+            img.onload = () => {
+              canvas.width = logoSize;
+              canvas.height = logoSize;
+              
+              if (ctx) {
+                ctx.drawImage(img, 0, 0, logoSize, logoSize);
+                const logoDataUrl = canvas.toDataURL('image/png');
+                
+                // Create logo elements for SVG
+                const backgroundRect = options.logoShape === 'rounded' 
+                  ? `<circle cx="${x + logoSize/2}" cy="${y + logoSize/2}" r="${(logoSize + padding * 2)/2}" fill="${isDarkMode ? '#1f2937' : '#ffffff'}"/>`
+                  : `<rect x="${x - padding}" y="${y - padding}" width="${logoSize + padding * 2}" height="${logoSize + padding * 2}" fill="${isDarkMode ? '#1f2937' : '#ffffff'}"/>`;
+                
+                const logoElement = options.logoShape === 'rounded'
+                  ? `<defs><clipPath id="logoClip"><circle cx="${x + logoSize/2}" cy="${y + logoSize/2}" r="${logoSize/2}"/></clipPath></defs><image x="${x}" y="${y}" width="${logoSize}" height="${logoSize}" href="${logoDataUrl}" clip-path="url(#logoClip)"/>`
+                  : `<image x="${x}" y="${y}" width="${logoSize}" height="${logoSize}" href="${logoDataUrl}"/>`;
+                
+                // Insert logo into SVG
+                svgContent = svgContent.replace('</svg>', `${backgroundRect}${logoElement}</svg>`);
+                
+                const svgBlob = new Blob([svgContent], { type: 'image/svg+xml' });
+                const svgUrl = URL.createObjectURL(svgBlob);
+                const svgLink = document.createElement('a');
+                svgLink.download = `${baseFilename}.svg`;
+                svgLink.href = svgUrl;
+                svgLink.click();
+                URL.revokeObjectURL(svgUrl);
+              }
+            };
+            img.src = URL.createObjectURL(options.logoFile);
+          } else {
+            const svgBlob = new Blob([svgContent], { type: 'image/svg+xml' });
+            const svgUrl = URL.createObjectURL(svgBlob);
+            const svgLink = document.createElement('a');
+            svgLink.download = `${baseFilename}.svg`;
+            svgLink.href = svgUrl;
+            svgLink.click();
+            URL.revokeObjectURL(svgUrl);
+          }
+          break;
+          
+        case 'pdf':
+          const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4'
+          });
+          
+          // Calculate dimensions for centering
+          const pdfWidth = pdf.internal.pageSize.getWidth();
+          const pdfHeight = pdf.internal.pageSize.getHeight();
+          const qrSizeMM = Math.min(pdfWidth * 0.6, pdfHeight * 0.6); // 60% of page size
+          const xPos = (pdfWidth - qrSizeMM) / 2;
+          const yPos = (pdfHeight - qrSizeMM) / 2;
+          
+          // Add title
+          pdf.setFontSize(20);
+          pdf.setTextColor(0, 0, 0);
+          pdf.text('QR Code', pdfWidth / 2, 30, { align: 'center' });
+          
+          // Add QR code image
+          if (qrDataUrl) {
+            pdf.addImage(qrDataUrl, 'PNG', xPos, yPos, qrSizeMM, qrSizeMM);
+          }
+          
+          // Add footer with generation info
+          pdf.setFontSize(10);
+          pdf.setTextColor(100, 100, 100);
+          pdf.text(`Generated by QRBrandr on ${new Date().toLocaleDateString()}`, pdfWidth / 2, pdfHeight - 20, { align: 'center' });
+          pdf.text(`Content: ${options.text.substring(0, 50)}${options.text.length > 50 ? '...' : ''}`, pdfWidth / 2, pdfHeight - 15, { align: 'center' });
+          
+          pdf.save(`${baseFilename}.pdf`);
+          break;
+      }
+    } catch (error) {
+      console.error('Error downloading QR code:', error);
+    }
   };
 
   const clearLogo = () => {
@@ -197,7 +323,7 @@ function App() {
             </button>
           </div>
           <p className="text-gray-600 dark:text-gray-300 text-lg max-w-2xl mx-auto">
-            Create professional QR codes with embedded logos and images. Perfect for branding, marketing, and personal use.
+            Create professional QR codes with embedded logos and images. Export in multiple formats for any use case.
           </p>
         </div>
 
@@ -423,47 +549,79 @@ function App() {
                 </div>
               </div>
 
+              {/* Export Format Selection */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  Export Format
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {Object.entries(EXPORT_FORMATS).map(([key, format]) => {
+                    const IconComponent = format.icon;
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => setSelectedFormat(format.value)}
+                        className={`flex flex-col items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all duration-200 ${
+                          selectedFormat === format.value
+                            ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                            : 'border-gray-200 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500'
+                        }`}
+                      >
+                        <IconComponent className="w-5 h-5" />
+                        <div className="text-center">
+                          <div className="text-sm font-medium">{format.label}</div>
+                          <div className="text-xs opacity-75">{format.description}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <button
                 onClick={downloadQRCode}
                 disabled={!qrDataUrl || isGenerating}
                 className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Download className="w-4 h-4" />
-                Download PNG
+                Download {EXPORT_FORMATS[selectedFormat].label}
               </button>
             </div>
 
             {/* Instructions */}
             <div className="glass-card rounded-2xl p-6">
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">How It Works</h3>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">Export Formats</h3>
               <div className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
                 <div className="flex items-start gap-2">
-                  <div className="w-2 h-2 bg-primary-500 dark:bg-primary-400 rounded-full mt-2 flex-shrink-0"></div>
-                  <p>Enter any text, URL, or data you want to encode in the QR code</p>
+                  <FileImage className="w-4 h-4 text-primary-500 dark:text-primary-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium">PNG - High-quality raster image</p>
+                    <p className="text-xs opacity-75">Perfect for web use, social media, and printing</p>
+                  </div>
                 </div>
                 <div className="flex items-start gap-2">
-                  <div className="w-2 h-2 bg-primary-500 dark:bg-primary-400 rounded-full mt-2 flex-shrink-0"></div>
-                  <p>Upload a logo or image to embed in the center of the QR code</p>
+                  <FileText className="w-4 h-4 text-primary-500 dark:text-primary-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium">SVG - Scalable vector graphics</p>
+                    <p className="text-xs opacity-75">Infinitely scalable, ideal for logos and professional printing</p>
+                  </div>
                 </div>
                 <div className="flex items-start gap-2">
-                  <div className="w-2 h-2 bg-primary-500 dark:bg-primary-400 rounded-full mt-2 flex-shrink-0"></div>
-                  <p>Choose between square or rounded logo shapes for different aesthetics</p>
+                  <File className="w-4 h-4 text-primary-500 dark:text-primary-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium">PDF - Portable document format</p>
+                    <p className="text-xs opacity-75">Professional documents, presentations, and archival</p>
+                  </div>
                 </div>
-                <div className="flex items-start gap-2">
-                  <div className="w-2 h-2 bg-primary-500 dark:bg-primary-400 rounded-full mt-2 flex-shrink-0"></div>
-                  <p>Toggle auto-generation or use the "Generate QR Code" button for manual control</p>
-                </div>
-                <div className="flex items-start gap-2">
-                  <div className="w-2 h-2 bg-primary-500 dark:bg-primary-400 rounded-full mt-2 flex-shrink-0"></div>
-                  <p>Adjust the error correction level - "High (30%)" is recommended for embedded images</p>
-                </div>
-                <div className="flex items-start gap-2">
-                  <div className="w-2 h-2 bg-primary-500 dark:bg-primary-400 rounded-full mt-2 flex-shrink-0"></div>
-                  <p>Control logo size (10-30%) to maintain scannability</p>
-                </div>
-                <div className="flex items-start gap-2">
-                  <div className="w-2 h-2 bg-primary-500 dark:bg-primary-400 rounded-full mt-2 flex-shrink-0"></div>
-                  <p>Download your custom QR code as a high-quality PNG image</p>
+              </div>
+              
+              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <h4 className="font-medium text-gray-800 dark:text-gray-100 mb-2">Quick Tips</h4>
+                <div className="space-y-2 text-xs text-gray-600 dark:text-gray-300">
+                  <p>• Use PNG for general web and social media sharing</p>
+                  <p>• Choose SVG for professional branding and large-scale printing</p>
+                  <p>• Select PDF for formal documents and presentations</p>
+                  <p>• Higher error correction levels work better with embedded logos</p>
                 </div>
               </div>
             </div>
