@@ -1,7 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import QRCode from 'qrcode';
 import jsPDF from 'jspdf';
-import { Download, Upload, QrCode, Settings, Image as ImageIcon, RefreshCw, Sun, Moon, Square, Circle, FileImage, FileText, File } from 'lucide-react';
+import { Download, Upload, QrCode, Settings, Image as ImageIcon, RefreshCw, Sun, Moon, Square, Circle, FileImage, FileText, File, Grid } from 'lucide-react';
+import BatchGenerator from './components/BatchGenerator';
 
 interface QROptions {
   text: string;
@@ -13,6 +14,7 @@ interface QROptions {
 }
 
 type ExportFormat = 'png' | 'svg' | 'pdf';
+type AppMode = 'single' | 'batch';
 
 const ERROR_CORRECTION_LEVELS = {
   L: { label: 'Low (7%)', value: 'L' as const },
@@ -33,6 +35,7 @@ const EXPORT_FORMATS = {
 };
 
 function App() {
+  const [mode, setMode] = useState<AppMode>('single');
   const [options, setOptions] = useState<QROptions>({
     text: 'https://example.com',
     size: 300,
@@ -164,10 +167,10 @@ function App() {
   }, [options, isDarkMode]);
 
   useEffect(() => {
-    if (autoGenerate) {
+    if (autoGenerate && mode === 'single') {
       generateQRCode();
     }
-  }, [generateQRCode, autoGenerate]);
+  }, [generateQRCode, autoGenerate, mode]);
 
   const handleManualGenerate = () => {
     generateQRCode();
@@ -322,311 +325,341 @@ function App() {
               )}
             </button>
           </div>
-          <p className="text-gray-600 dark:text-gray-300 text-lg max-w-2xl mx-auto">
+          <p className="text-gray-600 dark:text-gray-300 text-lg max-w-2xl mx-auto mb-6">
             Create professional QR codes with embedded logos and images. Export in multiple formats for any use case.
           </p>
+
+          {/* Mode Toggle */}
+          <div className="flex items-center justify-center gap-2 mb-8">
+            <button
+              onClick={() => setMode('single')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                mode === 'single'
+                  ? 'bg-primary-500 text-white shadow-lg'
+                  : 'bg-white/80 dark:bg-gray-800/80 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-800'
+              }`}
+            >
+              <QrCode className="w-4 h-4" />
+              Single QR Code
+            </button>
+            <button
+              onClick={() => setMode('batch')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                mode === 'batch'
+                  ? 'bg-primary-500 text-white shadow-lg'
+                  : 'bg-white/80 dark:bg-gray-800/80 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-800'
+              }`}
+            >
+              <Grid className="w-4 h-4" />
+              Batch Generation
+            </button>
+          </div>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-8">
-          {/* Controls Panel */}
-          <div className="space-y-6">
-            <div className="glass-card rounded-2xl p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Settings className="w-5 h-5 text-primary-600 dark:text-primary-400" />
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">QR Code Settings</h2>
-              </div>
-
-              {/* Text Input */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Text or URL to Encode
-                </label>
-                <textarea
-                  value={options.text}
-                  onChange={(e) => setOptions(prev => ({ ...prev, text: e.target.value }))}
-                  placeholder="Enter text, URL, or any data..."
-                  className="input-field resize-none h-24"
-                />
-              </div>
-
-              {/* Size Control */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  QR Code Size: {options.size}px
-                </label>
-                <input
-                  type="range"
-                  min="100"
-                  max="400"
-                  step="10"
-                  value={options.size}
-                  onChange={(e) => setOptions(prev => ({ ...prev, size: parseInt(e.target.value) }))}
-                  className="slider w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                />
-                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  <span>100px</span>
-                  <span>400px</span>
+        {mode === 'batch' ? (
+          <BatchGenerator isDarkMode={isDarkMode} />
+        ) : (
+          <div className="grid lg:grid-cols-2 gap-8">
+            {/* Controls Panel */}
+            <div className="space-y-6">
+              <div className="glass-card rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <Settings className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                  <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">QR Code Settings</h2>
                 </div>
-              </div>
 
-              {/* Error Correction Level */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Error Correction Level
-                </label>
-                <select
-                  value={options.errorCorrectionLevel}
-                  onChange={(e) => setOptions(prev => ({ 
-                    ...prev, 
-                    errorCorrectionLevel: e.target.value as 'L' | 'M' | 'Q' | 'H' 
-                  }))}
-                  className="input-field"
-                >
-                  {Object.entries(ERROR_CORRECTION_LEVELS).map(([key, level]) => (
-                    <option key={key} value={level.value}>
-                      {level.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Higher levels allow larger image overlays while maintaining scannability
-                </p>
-              </div>
-
-              {/* Auto-generate Toggle */}
-              <div className="mb-6">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={autoGenerate}
-                    onChange={(e) => setAutoGenerate(e.target.checked)}
-                    className="rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500 dark:bg-gray-700"
+                {/* Text Input */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Text or URL to Encode
+                  </label>
+                  <textarea
+                    value={options.text}
+                    onChange={(e) => setOptions(prev => ({ ...prev, text: e.target.value }))}
+                    placeholder="Enter text, URL, or any data..."
+                    className="input-field resize-none h-24"
                   />
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Auto-generate on changes
-                  </span>
-                </label>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Uncheck to manually control when QR codes are generated
-                </p>
-              </div>
+                </div>
 
-              {/* Generate Button */}
-              <button
-                onClick={handleManualGenerate}
-                disabled={isGenerating || !options.text.trim()}
-                className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isGenerating ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="w-4 h-4" />
-                    Generate QR Code
-                  </>
-                )}
-              </button>
-            </div>
+                {/* Size Control */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    QR Code Size: {options.size}px
+                  </label>
+                  <input
+                    type="range"
+                    min="100"
+                    max="400"
+                    step="10"
+                    value={options.size}
+                    onChange={(e) => setOptions(prev => ({ ...prev, size: parseInt(e.target.value) }))}
+                    className="slider w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    <span>100px</span>
+                    <span>400px</span>
+                  </div>
+                </div>
 
-            {/* Logo Upload */}
-            <div className="glass-card rounded-2xl p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <ImageIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Logo/Image Embedding</h2>
-              </div>
+                {/* Error Correction Level */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Error Correction Level
+                  </label>
+                  <select
+                    value={options.errorCorrectionLevel}
+                    onChange={(e) => setOptions(prev => ({ 
+                      ...prev, 
+                      errorCorrectionLevel: e.target.value as 'L' | 'M' | 'Q' | 'H' 
+                    }))}
+                    className="input-field"
+                  >
+                    {Object.entries(ERROR_CORRECTION_LEVELS).map(([key, level]) => (
+                      <option key={key} value={level.value}>
+                        {level.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Higher levels allow larger image overlays while maintaining scannability
+                  </p>
+                </div>
 
-              <div className="mb-4">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
+                {/* Auto-generate Toggle */}
+                <div className="mb-6">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={autoGenerate}
+                      onChange={(e) => setAutoGenerate(e.target.checked)}
+                      className="rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500 dark:bg-gray-700"
+                    />
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Auto-generate on changes
+                    </span>
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Uncheck to manually control when QR codes are generated
+                  </p>
+                </div>
+
+                {/* Generate Button */}
                 <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="btn-secondary w-full flex items-center justify-center gap-2"
+                  onClick={handleManualGenerate}
+                  disabled={isGenerating || !options.text.trim()}
+                  className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Upload className="w-4 h-4" />
-                  Upload Logo/Image
+                  {isGenerating ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-4 h-4" />
+                      Generate QR Code
+                    </>
+                  )}
                 </button>
               </div>
 
-              {options.logoFile && (
-                <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-green-700 dark:text-green-300 font-medium">
-                      {options.logoFile.name}
-                    </span>
-                    <button
-                      onClick={clearLogo}
-                      className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
-                    >
-                      Remove
-                    </button>
-                  </div>
+              {/* Logo Upload */}
+              <div className="glass-card rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <ImageIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                  <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Logo/Image Embedding</h2>
                 </div>
-              )}
 
-              {options.logoFile && (
-                <div className="space-y-4">
-                  {/* Logo Shape Selection */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                      Logo Shape
-                    </label>
-                    <div className="grid grid-cols-2 gap-3">
-                      {Object.entries(LOGO_SHAPES).map(([key, shape]) => {
-                        const IconComponent = shape.icon;
-                        return (
-                          <button
-                            key={key}
-                            onClick={() => setOptions(prev => ({ ...prev, logoShape: shape.value }))}
-                            className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all duration-200 ${
-                              options.logoShape === shape.value
-                                ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                                : 'border-gray-200 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500'
-                            }`}
-                          >
-                            <IconComponent className="w-4 h-4" />
-                            <span className="text-sm font-medium">{shape.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                      Choose between square or rounded logo appearance
-                    </p>
-                  </div>
-
-                  {/* Logo Size */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Logo Size: {options.logoSize}% of QR Code
-                    </label>
-                    <input
-                      type="range"
-                      min="10"
-                      max="30"
-                      step="1"
-                      value={options.logoSize}
-                      onChange={(e) => setOptions(prev => ({ ...prev, logoSize: parseInt(e.target.value) }))}
-                      className="slider w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                    />
-                    <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      <span>10%</span>
-                      <span>30%</span>
-                    </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Keep logo size reasonable to maintain QR code scannability
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Preview and Download */}
-          <div className="space-y-6">
-            <div className="glass-card rounded-2xl p-6">
-              <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Preview</h2>
-              
-              <div className="flex justify-center mb-6">
-                <div className="relative">
-                  {isGenerating && (
-                    <div className="absolute inset-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg flex items-center justify-center z-10">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 dark:border-primary-400"></div>
-                    </div>
-                  )}
-                  <canvas
-                    ref={canvasRef}
-                    className="border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg bg-white dark:bg-gray-800"
-                    style={{ maxWidth: '100%', height: 'auto' }}
+                <div className="mb-4">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileUpload}
+                    className="hidden"
                   />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="btn-secondary w-full flex items-center justify-center gap-2"
+                  >
+                    <Upload className="w-4 h-4" />
+                    Upload Logo/Image
+                  </button>
                 </div>
-              </div>
 
-              {/* Export Format Selection */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                  Export Format
-                </label>
-                <div className="grid grid-cols-3 gap-3">
-                  {Object.entries(EXPORT_FORMATS).map(([key, format]) => {
-                    const IconComponent = format.icon;
-                    return (
+                {options.logoFile && (
+                  <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-green-700 dark:text-green-300 font-medium">
+                        {options.logoFile.name}
+                      </span>
                       <button
-                        key={key}
-                        onClick={() => setSelectedFormat(format.value)}
-                        className={`flex flex-col items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all duration-200 ${
-                          selectedFormat === format.value
-                            ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                            : 'border-gray-200 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500'
-                        }`}
+                        onClick={clearLogo}
+                        className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
                       >
-                        <IconComponent className="w-5 h-5" />
-                        <div className="text-center">
-                          <div className="text-sm font-medium">{format.label}</div>
-                          <div className="text-xs opacity-75">{format.description}</div>
-                        </div>
+                        Remove
                       </button>
-                    );
-                  })}
-                </div>
-              </div>
+                    </div>
+                  </div>
+                )}
 
-              <button
-                onClick={downloadQRCode}
-                disabled={!qrDataUrl || isGenerating}
-                className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Download className="w-4 h-4" />
-                Download {EXPORT_FORMATS[selectedFormat].label}
-              </button>
+                {options.logoFile && (
+                  <div className="space-y-4">
+                    {/* Logo Shape Selection */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                        Logo Shape
+                      </label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {Object.entries(LOGO_SHAPES).map(([key, shape]) => {
+                          const IconComponent = shape.icon;
+                          return (
+                            <button
+                              key={key}
+                              onClick={() => setOptions(prev => ({ ...prev, logoShape: shape.value }))}
+                              className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all duration-200 ${
+                                options.logoShape === shape.value
+                                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                                  : 'border-gray-200 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500'
+                              }`}
+                            >
+                              <IconComponent className="w-4 h-4" />
+                              <span className="text-sm font-medium">{shape.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        Choose between square or rounded logo appearance
+                      </p>
+                    </div>
+
+                    {/* Logo Size */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Logo Size: {options.logoSize}% of QR Code
+                      </label>
+                      <input
+                        type="range"
+                        min="10"
+                        max="30"
+                        step="1"
+                        value={options.logoSize}
+                        onChange={(e) => setOptions(prev => ({ ...prev, logoSize: parseInt(e.target.value) }))}
+                        className="slider w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                      />
+                      <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <span>10%</span>
+                        <span>30%</span>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Keep logo size reasonable to maintain QR code scannability
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Instructions */}
-            <div className="glass-card rounded-2xl p-6">
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">Export Formats</h3>
-              <div className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
-                <div className="flex items-start gap-2">
-                  <FileImage className="w-4 h-4 text-primary-500 dark:text-primary-400 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="font-medium">PNG - High-quality raster image</p>
-                    <p className="text-xs opacity-75">Perfect for web use, social media, and printing</p>
+            {/* Preview and Download */}
+            <div className="space-y-6">
+              <div className="glass-card rounded-2xl p-6">
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Preview</h2>
+                
+                <div className="flex justify-center mb-6">
+                  <div className="relative">
+                    {isGenerating && (
+                      <div className="absolute inset-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg flex items-center justify-center z-10">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 dark:border-primary-400"></div>
+                      </div>
+                    )}
+                    <canvas
+                      ref={canvasRef}
+                      className="border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg bg-white dark:bg-gray-800"
+                      style={{ maxWidth: '100%', height: 'auto' }}
+                    />
                   </div>
                 </div>
-                <div className="flex items-start gap-2">
-                  <FileText className="w-4 h-4 text-primary-500 dark:text-primary-400 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="font-medium">SVG - Scalable vector graphics</p>
-                    <p className="text-xs opacity-75">Infinitely scalable, ideal for logos and professional printing</p>
+
+                {/* Export Format Selection */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                    Export Format
+                  </label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {Object.entries(EXPORT_FORMATS).map(([key, format]) => {
+                      const IconComponent = format.icon;
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => setSelectedFormat(format.value)}
+                          className={`flex flex-col items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all duration-200 ${
+                            selectedFormat === format.value
+                              ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                              : 'border-gray-200 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500'
+                          }`}
+                        >
+                          <IconComponent className="w-5 h-5" />
+                          <div className="text-center">
+                            <div className="text-sm font-medium">{format.label}</div>
+                            <div className="text-xs opacity-75">{format.description}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-                <div className="flex items-start gap-2">
-                  <File className="w-4 h-4 text-primary-500 dark:text-primary-400 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="font-medium">PDF - Portable document format</p>
-                    <p className="text-xs opacity-75">Professional documents, presentations, and archival</p>
-                  </div>
-                </div>
+
+                <button
+                  onClick={downloadQRCode}
+                  disabled={!qrDataUrl || isGenerating}
+                  className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Download className="w-4 h-4" />
+                  Download {EXPORT_FORMATS[selectedFormat].label}
+                </button>
               </div>
-              
-              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <h4 className="font-medium text-gray-800 dark:text-gray-100 mb-2">Quick Tips</h4>
-                <div className="space-y-2 text-xs text-gray-600 dark:text-gray-300">
-                  <p>• Use PNG for general web and social media sharing</p>
-                  <p>• Choose SVG for professional branding and large-scale printing</p>
-                  <p>• Select PDF for formal documents and presentations</p>
-                  <p>• Higher error correction levels work better with embedded logos</p>
+
+              {/* Instructions */}
+              <div className="glass-card rounded-2xl p-6">
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">Export Formats</h3>
+                <div className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
+                  <div className="flex items-start gap-2">
+                    <FileImage className="w-4 h-4 text-primary-500 dark:text-primary-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">PNG - High-quality raster image</p>
+                      <p className="text-xs opacity-75">Perfect for web use, social media, and printing</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <FileText className="w-4 h-4 text-primary-500 dark:text-primary-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">SVG - Scalable vector graphics</p>
+                      <p className="text-xs opacity-75">Infinitely scalable, ideal for logos and professional printing</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <File className="w-4 h-4 text-primary-500 dark:text-primary-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">PDF - Portable document format</p>
+                      <p className="text-xs opacity-75">Professional documents, presentations, and archival</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <h4 className="font-medium text-gray-800 dark:text-gray-100 mb-2">Quick Tips</h4>
+                  <div className="space-y-2 text-xs text-gray-600 dark:text-gray-300">
+                    <p>• Use PNG for general web and social media sharing</p>
+                    <p>• Choose SVG for professional branding and large-scale printing</p>
+                    <p>• Select PDF for formal documents and presentations</p>
+                    <p>• Higher error correction levels work better with embedded logos</p>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
